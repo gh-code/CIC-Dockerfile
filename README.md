@@ -15,17 +15,21 @@ The Dockerfile and some helper files make CIC tools working everywhere.
     dflags += " --add-host=synology_nas:192.168.1.10";
     ```
     * If you have LDAP server, add information in *auto.syno* and *Dockerfile*
-3. Build Docker image
+3. Compile uname26.c
     ```sh
-    docker build -t cic .
+    $ gcc -o uname26 uname26.c
     ```
-4. Compile launcher program (*root* permission is required)
+4. Build Docker image
+    ```sh
+    $ docker build -t cic .
+    ```
+5. Compile launcher program (*root* permission is required)
     ```sh
     $ g++ -o cic main.cpp
     $ chown root:root cic
     $ chmod u+s cic
     ```
-5. Run
+6. Run
     ```sh
     $ ./cic <user>
     ```
