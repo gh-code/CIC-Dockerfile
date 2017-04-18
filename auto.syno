@@ -1,0 +1,86 @@
+#!/bin/bash
+# Copyright (c) 2000-2014 Synology Inc. All rights reserved.
+
+
+################### NOTE ###################
+#
+# Adjust following settings to match your LDAP server.
+#
+# If using TLS or ldaps://, you have to append LDAP server's certificate to
+# your client (in the file specified by tls_cacert in ldap.conf).
+#
+############################################
+# LDAP server URI, must starts with "ldap://" or "ldaps://".
+LDAP_URI="ldap://synology_nas"
+# Search base of LDAP server.
+BASE_DN=""
+# "yes" or "no" means use TLS for LDAP connections or not.
+USE_TLS="no"
+# User-defined domain name (login suffix).
+#DOMAIN_NAME="mclaren"
+# NFS server, default use LDAP_URI.
+#NFS_SERVER="nfs.syno.com"
+# NFS folder for home, default use /var/services/homes.
+#NFS_FOLDER="/export_home"
+
+ToUpper() {  ### <string>
+   echo "$1" | tr [:lower:] [:upper:]
+}
+
+
+ResolveDomainName() {  ### <base_dn>
+   local token= domain=
+
+   for token in ${1//,/ }; do
+       domain="$domain.${token#*=}"
+   done
+   echo "`ToUpper ${domain:1}`"
+}
+
+
+key="$1"
+opt="-LLLxH"
+if [ "$USE_TLS" = "yes" ]; then
+   opt="-Z $opt"
+fi
+if [ -z "$key" ]; then
+   exit 0
+fi
+
+
+if [ -z "$NFS_SERVER" ]; then
+   # Use pre-defined NFS server if any.
+   NFS_SERVER="${LDAP_URI#ldap*://}"
+fi
+if [ -n "$NFS_FOLDER" ]; then
+   # Use pre-defined NFS folder if any.
+   echo "-fstype=nfs $NFS_SERVER:${NFS_FOLDER// /\\ }/${key// /\\ }"
+   exit 0
+fi
+
+
+if [ -z "$LDAP_URI" -o -z "$BASE_DN" ]; then
+   >&2 echo "empty LDAP_URI or BASE_DN, please check your '$0'"
+   exit 1
+fi
+
+if [ -z "$DOMAIN_NAME" ]; then
+   domain="`ResolveDomainName $BASE_DN`"
+else
+   # Use pre-defined domain name (login suffix) if any.
+   domain="`ToUpper $DOMAIN_NAME`"
+fi
+uid="`ldapsearch $opt "$LDAP_URI" -b "$BASE_DN" "uid=$key" uidNumber | grep 'uidNumber:' | awk '{print $2}'`"
+if [ -z "$uid" ]; then
+   >&2 echo "no uid found for user '$key'"
+   exit 1
+fi
+if ! [[ "$uid" =~ ^[0-9]+ ]]; then
+   >&2 echo "invalid uid '$uid'"
+   exit 1
+fi
+num=$(( $uid >> 14 ))
+
+echo "-fstype=nfs $NFS_SERVER:/volume1/homes/@LH-$domain/$num/${key// /\\ }-$uid"
+
+# vim:ft=sh ts=4 sts=4 sw=4 et
